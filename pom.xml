@@ -8,10 +8,22 @@
     <artifactId>aom</artifactId>
     <version>1.0</version>
 
+    <packaging>jar</packaging>
+
+    <name>AOM</name>
+    <description>Created to map simple annotated objects to abstract classes entities</description>
+    <url>https://github.com/Mixfaa/AnnotationObjectMapper</url>
+
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
     <properties>
-        <maven.compiler.source>19</maven.compiler.source>
-        <maven.compiler.target>19</maven.compiler.target>
-        <maven.compiler.release>19</maven.compiler.release>
+        <maven.compiler.source>11</maven.compiler.source>
+        <maven.compiler.target>11</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 

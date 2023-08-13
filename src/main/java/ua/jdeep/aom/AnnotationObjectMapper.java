@@ -29,6 +29,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 public final class AnnotationObjectMapper {
     private static final Map<Class<?>, Class<?>> sourceTargetClassMap = new HashMap<>();
@@ -43,8 +45,8 @@ public final class AnnotationObjectMapper {
     }
 
     private AnnotationObjectMapper() {
-
     }
+
 
     private static void substituteAnnotationsPropsToStaticFields() throws UnsuitableModifiersException {
         Iterable<Class<?>> targetClasses = ClassIndex.getAnnotated(MappingTarget.class);
@@ -139,7 +141,9 @@ public final class AnnotationObjectMapper {
         return classBuilder;
     }
 
-    // made only to load class to memory call and call static block
+    /**
+     * Call it at application startup to load {@link AnnotationObjectMapper} class to memory, it will cause static block call
+     */
     public static void initialize() {
 
     }
@@ -148,6 +152,13 @@ public final class AnnotationObjectMapper {
         return instance;
     }
 
+    /**
+     *
+     * @param source Source object that needs to be mapped (object, which class is annotated with your annotations)
+     * @param targetClass Class to which source object needs to be mapped (abstract class, annotated with annotations from {@link ua.jdeep.aom.annotations}
+     * @return Instance of targetClass, with methods, mapped to source object
+     * @param <T> Target class type, annotated with {@link MappingTarget}
+     */
     public <T> T mapObjectTo(Object source, Class<T> targetClass) throws AmbiguousDefinitionException, UnsuitableModifiersException, TypesNotMatchException {
         Class<?> sourceClass = source.getClass();
         Class<?> cachedTargetClass = sourceTargetClassMap.get(sourceClass);
@@ -197,14 +208,22 @@ public final class AnnotationObjectMapper {
         }
     }
 
-    public <T> List<T> mapObjectsTo(List<Object> beans, Class<T> targetClass) {
+    /**
+     *
+     * @param beans iterable object, with objects which should be mapped to targetClass
+     * @param targetClass Class to which source object needs to be mapped (abstract class, annotated with annotations from {@link ua.jdeep.aom.annotations}
+     * @return List, containing mapped objects
+     * @param <T> Target class type, annotated with {@link MappingTarget}
+     * @see #mapObjectTo(Object, Class)
+     */
+    public <T> List<T> mapObjectsTo(Iterable<Object> beans, Class<T> targetClass) {
 
-        return beans.stream().map(bean -> {
+       return StreamSupport.stream(beans.spliterator(), false).map(bean -> {
             try {
                 return mapObjectTo(bean, targetClass);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
-        }).toList();
+        }).collect(Collectors.toList());
     }
 }
