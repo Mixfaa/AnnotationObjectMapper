@@ -197,11 +197,11 @@ public final class AnnotationObjectMapper {
 
         classBuilder = implementFieldMappingMethods(objectMappingRelatedData, classBuilder);
 
-        try (DynamicType.Unloaded<T> unloadedBuiltClass = classBuilder.make()) {
-            Class<? extends T> loadedBuildClass = unloadedBuiltClass.load(targetClass.getClassLoader()).getLoaded();
-            sourceTargetClassMap.put(sourceClass, loadedBuildClass);
+        try (DynamicType.Unloaded<T> unloadedClass = classBuilder.make()) {
+            Class<? extends T> loadedClass = unloadedClass.load(targetClass.getClassLoader()).getLoaded();
+            sourceTargetClassMap.put(sourceClass, loadedClass);
 
-            return loadedBuildClass.getConstructor(Object.class).newInstance(source);
+            return loadedClass.getConstructor(Object.class).newInstance(source);
         } catch (IOException | InvocationTargetException | InstantiationException | IllegalAccessException |
                  NoSuchMethodException e) {
             throw new RuntimeException(e);
