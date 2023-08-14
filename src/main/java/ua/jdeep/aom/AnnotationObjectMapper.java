@@ -10,6 +10,7 @@ import net.bytebuddy.implementation.MethodDelegation;
 import net.bytebuddy.implementation.bytecode.assign.Assigner;
 import net.bytebuddy.matcher.ElementMatchers;
 import org.atteo.classindex.ClassIndex;
+import ua.jdeep.aom.advices.AnnotationAccessAdvice;
 import ua.jdeep.aom.advices.FieldAccessAdvice;
 import ua.jdeep.aom.annotations.MapAnnotationProperty;
 import ua.jdeep.aom.annotations.MapField;
@@ -25,16 +26,18 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
+
 
 public final class AnnotationObjectMapper {
     private static final Map<Class<?>, Class<?>> sourceTargetClassMap = new HashMap<>();
     private static final AnnotationObjectMapper instance = new AnnotationObjectMapper();
+    private static final Logger logger = Logger.getLogger(AnnotationObjectMapper.class.getName());
 
     static {
         try {
@@ -48,17 +51,16 @@ public final class AnnotationObjectMapper {
     }
 
 
-    private static void substituteAnnotationsPropsToStaticFields() throws UnsuitableModifiersException {
+    private static void substituteAnnotationsPropsToStaticFields() {
         Iterable<Class<?>> targetClasses = ClassIndex.getAnnotated(MappingTarget.class);
 
         for (Class<?> targetClass : targetClasses) {
 
-            List<Field> mappingToPropFields = AnnotationUtils.getAnnotatedFields(targetClass, MapAnnotationProperty.class);
+            List<Field> mappingToPropFields = AOMUtil.findField(targetClass,
+                    ElementMatchers.isAnnotatedWith(MapAnnotationProperty.class)
+                            .and(ElementMatchers.isStatic()));
 
             for (Field mappingToPropField : mappingToPropFields) {
-
-                if (!Modifier.isStatic(mappingToPropField.getModifiers()))
-                    throw new UnsuitableModifiersException("Field mapped to annotation parameter must be static");
 
                 MapAnnotationProperty mapAnnotationProperty = mappingToPropField.getAnnotation(MapAnnotationProperty.class);
 
@@ -79,29 +81,24 @@ public final class AnnotationObjectMapper {
         }
     }
 
-    private static <T> DynamicType.Builder<T> implementMethodMappingMethods(ObjectMappingRelatedData<T> data, DynamicType.Builder<T> classBuilder) throws AmbiguousDefinitionException, TypesNotMatchException, UnsuitableModifiersException {
+    private static <T> DynamicType.Builder<T> implementMethodMappingMethods(ObjectMappingRelatedData<T> data, DynamicType.Builder<T> classBuilder) throws AmbiguousDefinitionException {
 
-        List<Method> methodMappings = AnnotationUtils.getAnnotatedMethods(data.targetClass, MapMethod.class);
+        List<Method> methodMappings = AOMUtil.getAnnotatedMethods(data.targetClass, MapMethod.class);
 
         for (Method targetClassAnnotatedMethod : methodMappings) {
 
             MapMethod mapMethod = targetClassAnnotatedMethod.getAnnotation(MapMethod.class);
 
-            List<Method> annotatedMethods = AnnotationUtils.getAnnotatedMethods(data.sourceClass, mapMethod.annotatedWith());
+            List<Method> annotatedMethods = AOMUtil.findMethod(data.sourceClass,
+                    ElementMatchers.isAnnotatedWith(mapMethod.annotatedWith())
+                            .and(ElementMatchers.isPublic())
+                            .and(ElementMatchers.returns(targetClassAnnotatedMethod.getReturnType()))
+                            .and(ElementMatchers.takesArguments(targetClassAnnotatedMethod.getParameterTypes())));
 
             if (annotatedMethods.size() != 1)
                 throw new AmbiguousDefinitionException("More or less than 1 method annotated with " + mapMethod.annotatedWith());
 
             Method sourceClassMethod = annotatedMethods.get(0);
-
-            if (!Modifier.isPublic(sourceClassMethod.getModifiers()))
-                throw new UnsuitableModifiersException("Source class method is not public, can't access it");
-
-            if (sourceClassMethod.getReturnType() != targetClassAnnotatedMethod.getReturnType())
-                throw new TypesNotMatchException("Target method return type is not matching with source class method return type, method annotated with  " + mapMethod.annotatedWith());
-
-            if (!Arrays.equals(sourceClassMethod.getParameterTypes(), targetClassAnnotatedMethod.getParameterTypes()))
-                throw new TypesNotMatchException("Target method parameter types is not matching with source class method parameter types, method annotated with  " + mapMethod.annotatedWith());
 
             classBuilder = classBuilder.method(
                     ElementMatchers.is(targetClassAnnotatedMethod)
@@ -113,14 +110,16 @@ public final class AnnotationObjectMapper {
         return classBuilder;
     }
 
-    private static <T> DynamicType.Builder<T> implementFieldMappingMethods(ObjectMappingRelatedData<T> data, DynamicType.Builder<T> classBuilder) throws AmbiguousDefinitionException, TypesNotMatchException {
-        List<Method> fieldAccessMethods = AnnotationUtils.getAnnotatedMethods(data.targetClass, MapField.class);
+    private static <T> DynamicType.Builder<T> implementFieldMappingMethods(ObjectMappingRelatedData<T> data, DynamicType.Builder<T> classBuilder) throws AmbiguousDefinitionException {
+        List<Method> fieldAccessMethods = AOMUtil.getAnnotatedMethods(data.targetClass, MapField.class);
 
         for (Method fieldAccessMethod : fieldAccessMethods) {
 
             MapField mapField = fieldAccessMethod.getAnnotation(MapField.class);
 
-            List<Field> sourceClassAnnotatedFields = AnnotationUtils.getAnnotatedFields(data.sourceClass, mapField.annotatedWith());
+            List<Field> sourceClassAnnotatedFields = AOMUtil.findField(data.sourceClass,
+                    ElementMatchers.isAnnotatedWith(mapField.annotatedWith())
+                            .and(ElementMatchers.fieldType(fieldAccessMethod.getReturnType())));
 
             if (sourceClassAnnotatedFields.size() != 1)
                 throw new AmbiguousDefinitionException("More or less than 1 field annotated with " + mapField.annotatedWith());
@@ -129,9 +128,6 @@ public final class AnnotationObjectMapper {
 
             sourceClassField.setAccessible(true);
 
-            if (sourceClassField.getType() != fieldAccessMethod.getReturnType())
-                throw new TypesNotMatchException("Source class field type is not matching with method return type in target class");
-
             classBuilder = classBuilder.method(
                     ElementMatchers.is(fieldAccessMethod)
                             .and(ElementMatchers.isDeclaredBy(data.targetClass))
@@ -139,6 +135,24 @@ public final class AnnotationObjectMapper {
             ).intercept(MethodDelegation.to(new FieldAccessAdvice.Getter(sourceClassField)));
         }
         return classBuilder;
+    }
+
+    private static <T> DynamicType.Builder<T> implementGetAnnotationMethod(ObjectMappingRelatedData<T> data, DynamicType.Builder<T> classBuilder) {
+        List<Method> getAnnotationMethods = AOMUtil.findMethod(data.targetClass,
+                ElementMatchers.named("getAnnotation")
+                        .and(ElementMatchers.returns(Annotation.class))
+                        .and(ElementMatchers.takesArguments(Class.class))
+                        .and(ElementMatchers.not(ElementMatchers.isAnnotatedWith(ElementMatchers.any()))));
+
+        if (getAnnotationMethods.size() != 1) {
+            logger.warning("More or less than 1 methods match for getAnnotationMethod in " + data.sourceClass);
+            return classBuilder;
+        }
+
+        Method getAnnotationMethod = getAnnotationMethods.get(0);
+
+        return classBuilder.method(ElementMatchers.is(getAnnotationMethod))
+                .intercept(MethodDelegation.to(AnnotationAccessAdvice.class));
     }
 
     /**
@@ -153,11 +167,10 @@ public final class AnnotationObjectMapper {
     }
 
     /**
-     *
-     * @param source Source object that needs to be mapped (object, which class is annotated with your annotations)
+     * @param source      Source object that needs to be mapped (object, which class is annotated with your annotations)
      * @param targetClass Class to which source object needs to be mapped (abstract class, annotated with annotations from {@link ua.jdeep.aom.annotations}
+     * @param <T>         Target class type, annotated with {@link MappingTarget}
      * @return Instance of targetClass, with methods, mapped to source object
-     * @param <T> Target class type, annotated with {@link MappingTarget}
      */
     public <T> T mapObjectTo(Object source, Class<T> targetClass) throws AmbiguousDefinitionException, UnsuitableModifiersException, TypesNotMatchException {
         Class<?> sourceClass = source.getClass();
@@ -197,6 +210,8 @@ public final class AnnotationObjectMapper {
 
         classBuilder = implementFieldMappingMethods(objectMappingRelatedData, classBuilder);
 
+        classBuilder = implementGetAnnotationMethod(objectMappingRelatedData, classBuilder);
+
         try (DynamicType.Unloaded<T> unloadedClass = classBuilder.make()) {
             Class<? extends T> loadedClass = unloadedClass.load(targetClass.getClassLoader()).getLoaded();
             sourceTargetClassMap.put(sourceClass, loadedClass);
@@ -209,16 +224,15 @@ public final class AnnotationObjectMapper {
     }
 
     /**
-     *
-     * @param beans iterable object, with objects which should be mapped to targetClass
+     * @param beans       iterable object, with objects which should be mapped to targetClass
      * @param targetClass Class to which source object needs to be mapped (abstract class, annotated with annotations from {@link ua.jdeep.aom.annotations}
+     * @param <T>         Target class type, annotated with {@link MappingTarget}
      * @return List, containing mapped objects
-     * @param <T> Target class type, annotated with {@link MappingTarget}
      * @see #mapObjectTo(Object, Class)
      */
     public <T> List<T> mapObjectsTo(Iterable<Object> beans, Class<T> targetClass) {
 
-       return StreamSupport.stream(beans.spliterator(), false).map(bean -> {
+        return StreamSupport.stream(beans.spliterator(), false).map(bean -> {
             try {
                 return mapObjectTo(bean, targetClass);
             } catch (Exception e) {
