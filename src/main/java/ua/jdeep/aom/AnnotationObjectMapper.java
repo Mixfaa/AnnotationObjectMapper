@@ -35,7 +35,7 @@ import java.util.stream.StreamSupport;
 
 
 public final class AnnotationObjectMapper {
-    private static final Map<Class<?>, Class<?>> sourceTargetClassMap = new HashMap<>();
+    private final Map<Class<?>, Class<?>> sourceTargetClassMap = new HashMap<>();
     private static final AnnotationObjectMapper instance = new AnnotationObjectMapper();
     private static final Logger logger = Logger.getLogger(AnnotationObjectMapper.class.getName());
 
