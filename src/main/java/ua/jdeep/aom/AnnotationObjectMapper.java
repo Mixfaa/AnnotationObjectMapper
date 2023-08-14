@@ -5,6 +5,7 @@ import net.bytebuddy.description.modifier.FieldManifestation;
 import net.bytebuddy.description.modifier.Visibility;
 import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.implementation.FieldAccessor;
+import net.bytebuddy.implementation.FixedValue;
 import net.bytebuddy.implementation.MethodCall;
 import net.bytebuddy.implementation.MethodDelegation;
 import net.bytebuddy.implementation.bytecode.assign.Assigner;
@@ -12,10 +13,7 @@ import net.bytebuddy.matcher.ElementMatchers;
 import org.atteo.classindex.ClassIndex;
 import ua.jdeep.aom.advices.AnnotationAccessAdvice;
 import ua.jdeep.aom.advices.FieldAccessAdvice;
-import ua.jdeep.aom.annotations.MapAnnotationProperty;
-import ua.jdeep.aom.annotations.MapField;
-import ua.jdeep.aom.annotations.MapMethod;
-import ua.jdeep.aom.annotations.MappingTarget;
+import ua.jdeep.aom.annotations.*;
 import ua.jdeep.aom.exceptions.AmbiguousDefinitionException;
 import ua.jdeep.aom.exceptions.TypesNotMatchException;
 import ua.jdeep.aom.exceptions.UnsuitableModifiersException;
@@ -35,7 +33,6 @@ import java.util.stream.StreamSupport;
 
 
 public final class AnnotationObjectMapper {
-    private final Map<Class<?>, Class<?>> sourceTargetClassMap = new HashMap<>();
     private static final AnnotationObjectMapper instance = new AnnotationObjectMapper();
     private static final Logger logger = Logger.getLogger(AnnotationObjectMapper.class.getName());
 
@@ -47,6 +44,8 @@ public final class AnnotationObjectMapper {
         }
     }
 
+    private final Map<Class<?>, Class<?>> sourceTargetClassMap = new HashMap<>();
+
     private AnnotationObjectMapper() {
     }
 
@@ -57,12 +56,12 @@ public final class AnnotationObjectMapper {
         for (Class<?> targetClass : targetClasses) {
 
             List<Field> mappingToPropFields = AOMUtil.findFields(targetClass,
-                    ElementMatchers.isAnnotatedWith(MapAnnotationProperty.class)
+                    ElementMatchers.isAnnotatedWith(MapAnnotationPropertyForClass.class)
                             .and(ElementMatchers.isStatic()));
 
             for (Field mappingToPropField : mappingToPropFields) {
 
-                MapAnnotationProperty mapAnnotationProperty = mappingToPropField.getAnnotation(MapAnnotationProperty.class);
+                MapAnnotationPropertyForClass mapAnnotationProperty = mappingToPropField.getAnnotation(MapAnnotationPropertyForClass.class);
 
                 try {
                     Class<? extends Annotation> targetAnnotation = mapAnnotationProperty.targetAnnotation();
@@ -137,7 +136,33 @@ public final class AnnotationObjectMapper {
         return classBuilder;
     }
 
-    private static <T> DynamicType.Builder<T> implementGetAnnotationMethod(ObjectMappingRelatedData<T> data, DynamicType.Builder<T> classBuilder) {
+    private static <T> DynamicType.Builder<T> implementGetAnnotationMethods(ObjectMappingRelatedData<T> data, DynamicType.Builder<T> classBuilder) {
+        List<Method> annotationAccessMethods = AOMUtil.getAnnotatedMethods(data.targetClass, MapAnnotationProperty.class);
+
+        for (Method annotationAccessMethod : annotationAccessMethods) {
+
+            MapAnnotationProperty mapAnnotationProperty = annotationAccessMethod.getAnnotation(MapAnnotationProperty.class);
+
+            try {
+                Class<? extends Annotation> targetAnnotation = mapAnnotationProperty.targetAnnotation();
+                Method annotationPropMethod = targetAnnotation.getDeclaredMethod(mapAnnotationProperty.annotationPropName());
+
+                annotationPropMethod.trySetAccessible();
+
+                var propValue = annotationPropMethod.invoke(data.sourceClass.getAnnotation(targetAnnotation));
+
+                classBuilder.method(ElementMatchers.is(annotationAccessMethod))
+                        .intercept(FixedValue.value(propValue));
+
+            } catch (InvocationTargetException | NoSuchMethodException | IllegalAccessException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        return classBuilder;
+    }
+
+    private static <
+            T> DynamicType.Builder<T> implementGetAnnotationMethod(ObjectMappingRelatedData<T> data, DynamicType.Builder<T> classBuilder) {
         List<Method> getAnnotationMethods = AOMUtil.findMethods(data.targetClass,
                 ElementMatchers.named("getClassAnnotation")
                         .and(ElementMatchers.returns(Annotation.class))
@@ -172,7 +197,8 @@ public final class AnnotationObjectMapper {
      * @param <T>         Target class type, annotated with {@link MappingTarget}
      * @return Instance of targetClass, with methods, mapped to source object
      */
-    public <T> T mapObjectTo(Object source, Class<T> targetClass) throws AmbiguousDefinitionException, UnsuitableModifiersException, TypesNotMatchException {
+    public <T> T mapObjectTo(Object source, Class<T> targetClass) throws
+            AmbiguousDefinitionException, UnsuitableModifiersException, TypesNotMatchException {
         Class<?> sourceClass = source.getClass();
         Class<?> cachedTargetClass = sourceTargetClassMap.get(sourceClass);
 
@@ -211,6 +237,8 @@ public final class AnnotationObjectMapper {
         classBuilder = implementFieldMappingMethods(objectMappingRelatedData, classBuilder);
 
         classBuilder = implementGetAnnotationMethod(objectMappingRelatedData, classBuilder);
+
+        classBuilder = implementGetAnnotationMethods(objectMappingRelatedData, classBuilder);
 
         try (DynamicType.Unloaded<T> unloadedClass = classBuilder.make()) {
             Class<? extends T> loadedClass = unloadedClass.load(targetClass.getClassLoader()).getLoaded();

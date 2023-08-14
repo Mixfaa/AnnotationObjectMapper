@@ -13,6 +13,9 @@
   <component name="MarkdownSettingsMigration">
     <option name="stateVersion" value="1" />
   </component>
+  <component name="ProblemsViewState">
+    <option name="selectedTabId" value="ProjectErrors" />
+  </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 8
 }</component>
@@ -29,7 +32,7 @@
     &quot;project.structure.last.edited&quot;: &quot;Project&quot;,
     &quot;project.structure.proportion&quot;: &quot;0.15&quot;,
     &quot;project.structure.side.proportion&quot;: &quot;0.0&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;
+    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.keymap&quot;
   }
 }</component>
   <component name="RecentsManager">
@@ -62,7 +65,10 @@
       <workItem from="1691940299217" duration="6198000" />
       <workItem from="1691956718248" duration="4153000" />
       <workItem from="1692008416128" duration="705000" />
-      <workItem from="1692010664223" duration="366000" />
+      <workItem from="1692010664223" duration="688000" />
+      <workItem from="1692035540765" duration="278000" />
+      <workItem from="1692035837729" duration="1547000" />
+      <workItem from="1692037825251" duration="68000" />
     </task>
     <servers />
   </component>
