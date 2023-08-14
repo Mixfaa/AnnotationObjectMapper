@@ -1,15 +1,14 @@
 package testEntity;
 
 import testAnnotation.*;
-import ua.jdeep.aom.annotations.MapAnnotationPropertyForClass;
-import ua.jdeep.aom.annotations.MapField;
-import ua.jdeep.aom.annotations.MapMethod;
-import ua.jdeep.aom.annotations.MappingTarget;
+import ua.jdeep.aom.annotations.*;
 
 import java.lang.annotation.Annotation;
 
 @MappingTarget
 public abstract class TargetClass {
+    @MapAnnotationProperty(targetAnnotation = TestClassAnnotation2.class, annotationPropName = "intValue")
+    public int intValue;
 
     @MapAnnotationPropertyForClass(annotationPropName = "stringValue", sourceClass = ExampleSourceClass.class, targetAnnotation = TestClassAnnotation.class)
     public static String stringValueProp;

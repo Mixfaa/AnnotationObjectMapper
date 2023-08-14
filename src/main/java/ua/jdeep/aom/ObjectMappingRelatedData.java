@@ -1,7 +1,8 @@
 package ua.jdeep.aom;
 
-class ObjectMappingRelatedData<T> {
+public class ObjectMappingRelatedData<T> {
     Object source;
+    Object target;
     Class<?> sourceClass;
     Class<T> targetClass;
     int targetClassModifiers;

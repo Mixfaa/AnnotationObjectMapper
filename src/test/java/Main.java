@@ -25,5 +25,8 @@ public class Main {
 
         System.out.println(mappedObject.getClassAnnotation(TestClassAnnotation.class).stringValue());
         System.out.println(mappedObject.getClassAnnotation(TestClassAnnotation2.class).intValue());
+
+        System.out.println(mappedObject.intValue);
+
     }
 }

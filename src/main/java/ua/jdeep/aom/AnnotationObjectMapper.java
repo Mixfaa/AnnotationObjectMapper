@@ -5,24 +5,14 @@ import net.bytebuddy.description.modifier.FieldManifestation;
 import net.bytebuddy.description.modifier.Visibility;
 import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.implementation.FieldAccessor;
-import net.bytebuddy.implementation.FixedValue;
 import net.bytebuddy.implementation.MethodCall;
-import net.bytebuddy.implementation.MethodDelegation;
-import net.bytebuddy.implementation.bytecode.assign.Assigner;
-import net.bytebuddy.matcher.ElementMatchers;
-import org.atteo.classindex.ClassIndex;
-import ua.jdeep.aom.advices.AnnotationAccessAdvice;
-import ua.jdeep.aom.advices.FieldAccessAdvice;
-import ua.jdeep.aom.annotations.*;
+import ua.jdeep.aom.annotations.MappingTarget;
 import ua.jdeep.aom.exceptions.AmbiguousDefinitionException;
 import ua.jdeep.aom.exceptions.TypesNotMatchException;
 import ua.jdeep.aom.exceptions.UnsuitableModifiersException;
 
 import java.io.IOException;
-import java.lang.annotation.Annotation;
-import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.HashMap;
 import java.util.List;
@@ -38,7 +28,7 @@ public final class AnnotationObjectMapper {
 
     static {
         try {
-            substituteAnnotationsPropsToStaticFields();
+            AnnotationsImplementer.substituteAnnotationsPropsToStaticFields();
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -49,136 +39,6 @@ public final class AnnotationObjectMapper {
     private AnnotationObjectMapper() {
     }
 
-
-    private static void substituteAnnotationsPropsToStaticFields() {
-        Iterable<Class<?>> targetClasses = ClassIndex.getAnnotated(MappingTarget.class);
-
-        for (Class<?> targetClass : targetClasses) {
-
-            List<Field> mappingToPropFields = AOMUtil.findFields(targetClass,
-                    ElementMatchers.isAnnotatedWith(MapAnnotationPropertyForClass.class)
-                            .and(ElementMatchers.isStatic()));
-
-            for (Field mappingToPropField : mappingToPropFields) {
-
-                MapAnnotationPropertyForClass mapAnnotationProperty = mappingToPropField.getAnnotation(MapAnnotationPropertyForClass.class);
-
-                try {
-                    Class<? extends Annotation> targetAnnotation = mapAnnotationProperty.targetAnnotation();
-                    Method annotationPropMethod = targetAnnotation.getDeclaredMethod(mapAnnotationProperty.annotationPropName());
-
-                    annotationPropMethod.trySetAccessible();
-
-                    var propValue = annotationPropMethod.invoke(mapAnnotationProperty.sourceClass().getAnnotation(targetAnnotation));
-
-                    mappingToPropField.set(null, propValue);
-                } catch (InvocationTargetException | NoSuchMethodException | IllegalAccessException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-
-        }
-    }
-
-    private static <T> DynamicType.Builder<T> implementMethodMappingMethods(ObjectMappingRelatedData<T> data, DynamicType.Builder<T> classBuilder) throws AmbiguousDefinitionException {
-
-        List<Method> methodMappings = AOMUtil.getAnnotatedMethods(data.targetClass, MapMethod.class);
-
-        for (Method targetClassAnnotatedMethod : methodMappings) {
-
-            MapMethod mapMethod = targetClassAnnotatedMethod.getAnnotation(MapMethod.class);
-
-            List<Method> annotatedMethods = AOMUtil.findMethods(data.sourceClass,
-                    ElementMatchers.isAnnotatedWith(mapMethod.annotatedWith())
-                            .and(ElementMatchers.isPublic())
-                            .and(ElementMatchers.returns(targetClassAnnotatedMethod.getReturnType()))
-                            .and(ElementMatchers.takesArguments(targetClassAnnotatedMethod.getParameterTypes())));
-
-            if (annotatedMethods.size() != 1)
-                throw new AmbiguousDefinitionException("More or less than 1 method annotated with " + mapMethod.annotatedWith());
-
-            Method sourceClassMethod = annotatedMethods.get(0);
-
-            classBuilder = classBuilder.method(
-                    ElementMatchers.is(targetClassAnnotatedMethod)
-                            .and(ElementMatchers.isDeclaredBy(data.targetClass))
-                            .and(ElementMatchers.returns(targetClassAnnotatedMethod.getReturnType()))
-            ).intercept(MethodCall.invoke(sourceClassMethod).onField(AOMConstants.TARGET_OBJECT_FIELD_NAME).withAllArguments().withAssigner(Assigner.DEFAULT, Assigner.Typing.DYNAMIC));
-        }
-
-        return classBuilder;
-    }
-
-    private static <T> DynamicType.Builder<T> implementFieldMappingMethods(ObjectMappingRelatedData<T> data, DynamicType.Builder<T> classBuilder) throws AmbiguousDefinitionException {
-        List<Method> fieldAccessMethods = AOMUtil.getAnnotatedMethods(data.targetClass, MapField.class);
-
-        for (Method fieldAccessMethod : fieldAccessMethods) {
-
-            MapField mapField = fieldAccessMethod.getAnnotation(MapField.class);
-
-            List<Field> sourceClassAnnotatedFields = AOMUtil.findFields(data.sourceClass,
-                    ElementMatchers.isAnnotatedWith(mapField.annotatedWith())
-                            .and(ElementMatchers.fieldType(fieldAccessMethod.getReturnType())));
-
-            if (sourceClassAnnotatedFields.size() != 1)
-                throw new AmbiguousDefinitionException("More or less than 1 field annotated with " + mapField.annotatedWith());
-
-            Field sourceClassField = sourceClassAnnotatedFields.get(0);
-
-            sourceClassField.setAccessible(true);
-
-            classBuilder = classBuilder.method(
-                    ElementMatchers.is(fieldAccessMethod)
-                            .and(ElementMatchers.isDeclaredBy(data.targetClass))
-                            .and(ElementMatchers.returns(sourceClassField.getType()))
-            ).intercept(MethodDelegation.to(new FieldAccessAdvice.Getter(sourceClassField)));
-        }
-        return classBuilder;
-    }
-
-    private static <T> DynamicType.Builder<T> implementGetAnnotationMethods(ObjectMappingRelatedData<T> data, DynamicType.Builder<T> classBuilder) {
-        List<Method> annotationAccessMethods = AOMUtil.getAnnotatedMethods(data.targetClass, MapAnnotationProperty.class);
-
-        for (Method annotationAccessMethod : annotationAccessMethods) {
-
-            MapAnnotationProperty mapAnnotationProperty = annotationAccessMethod.getAnnotation(MapAnnotationProperty.class);
-
-            try {
-                Class<? extends Annotation> targetAnnotation = mapAnnotationProperty.targetAnnotation();
-                Method annotationPropMethod = targetAnnotation.getDeclaredMethod(mapAnnotationProperty.annotationPropName());
-
-                annotationPropMethod.trySetAccessible();
-
-                var propValue = annotationPropMethod.invoke(data.sourceClass.getAnnotation(targetAnnotation));
-
-                classBuilder.method(ElementMatchers.is(annotationAccessMethod))
-                        .intercept(FixedValue.value(propValue));
-
-            } catch (InvocationTargetException | NoSuchMethodException | IllegalAccessException e) {
-                throw new RuntimeException(e);
-            }
-        }
-        return classBuilder;
-    }
-
-    private static <
-            T> DynamicType.Builder<T> implementGetAnnotationMethod(ObjectMappingRelatedData<T> data, DynamicType.Builder<T> classBuilder) {
-        List<Method> getAnnotationMethods = AOMUtil.findMethods(data.targetClass,
-                ElementMatchers.named("getClassAnnotation")
-                        .and(ElementMatchers.returns(Annotation.class))
-                        .and(ElementMatchers.takesArguments(Class.class))
-                        .and(ElementMatchers.not(ElementMatchers.isAnnotatedWith(ElementMatchers.any()))));
-
-        if (getAnnotationMethods.size() != 1) {
-            logger.warning("More or less than 1 methods match for getClassAnnotation in " + data.sourceClass);
-            return classBuilder;
-        }
-
-        Method getAnnotationMethod = getAnnotationMethods.get(0);
-
-        return classBuilder.method(ElementMatchers.is(getAnnotationMethod))
-                .intercept(MethodDelegation.to(AnnotationAccessAdvice.ClassAnnotation.class));
-    }
 
     /**
      * Call it at application startup to load {@link AnnotationObjectMapper} class to memory, it will cause static block call
@@ -232,19 +92,26 @@ public final class AnnotationObjectMapper {
 
         ObjectMappingRelatedData<T> objectMappingRelatedData = new ObjectMappingRelatedData<>(source, targetClass);
 
-        classBuilder = implementMethodMappingMethods(objectMappingRelatedData, classBuilder);
+        classBuilder = AnnotationsImplementer.implementMethodMappingMethods(objectMappingRelatedData, classBuilder);
 
-        classBuilder = implementFieldMappingMethods(objectMappingRelatedData, classBuilder);
+        classBuilder = AnnotationsImplementer.implementFieldMappingMethods(objectMappingRelatedData, classBuilder);
 
-        classBuilder = implementGetAnnotationMethod(objectMappingRelatedData, classBuilder);
+        classBuilder = AnnotationsImplementer.implementGetAnnotationMethod(objectMappingRelatedData, classBuilder);
 
-        classBuilder = implementGetAnnotationMethods(objectMappingRelatedData, classBuilder);
+        classBuilder = AnnotationsImplementer.implementGetAnnotationPropMethods(objectMappingRelatedData, classBuilder);
 
         try (DynamicType.Unloaded<T> unloadedClass = classBuilder.make()) {
             Class<? extends T> loadedClass = unloadedClass.load(targetClass.getClassLoader()).getLoaded();
             sourceTargetClassMap.put(sourceClass, loadedClass);
 
-            return loadedClass.getConstructor(Object.class).newInstance(source);
+            var targetObject = loadedClass.getConstructor(Object.class).newInstance(source);
+
+            objectMappingRelatedData.target = targetObject;
+
+            AnnotationsImplementer.setupFieldMappedToAnnotationsProps(objectMappingRelatedData);
+
+            return targetObject;
+
         } catch (IOException | InvocationTargetException | InstantiationException | IllegalAccessException |
                  NoSuchMethodException e) {
             throw new RuntimeException(e);
