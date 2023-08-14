@@ -56,7 +56,7 @@ public final class AnnotationObjectMapper {
 
         for (Class<?> targetClass : targetClasses) {
 
-            List<Field> mappingToPropFields = AOMUtil.findField(targetClass,
+            List<Field> mappingToPropFields = AOMUtil.findFields(targetClass,
                     ElementMatchers.isAnnotatedWith(MapAnnotationProperty.class)
                             .and(ElementMatchers.isStatic()));
 
@@ -89,7 +89,7 @@ public final class AnnotationObjectMapper {
 
             MapMethod mapMethod = targetClassAnnotatedMethod.getAnnotation(MapMethod.class);
 
-            List<Method> annotatedMethods = AOMUtil.findMethod(data.sourceClass,
+            List<Method> annotatedMethods = AOMUtil.findMethods(data.sourceClass,
                     ElementMatchers.isAnnotatedWith(mapMethod.annotatedWith())
                             .and(ElementMatchers.isPublic())
                             .and(ElementMatchers.returns(targetClassAnnotatedMethod.getReturnType()))
@@ -117,7 +117,7 @@ public final class AnnotationObjectMapper {
 
             MapField mapField = fieldAccessMethod.getAnnotation(MapField.class);
 
-            List<Field> sourceClassAnnotatedFields = AOMUtil.findField(data.sourceClass,
+            List<Field> sourceClassAnnotatedFields = AOMUtil.findFields(data.sourceClass,
                     ElementMatchers.isAnnotatedWith(mapField.annotatedWith())
                             .and(ElementMatchers.fieldType(fieldAccessMethod.getReturnType())));
 
@@ -138,21 +138,21 @@ public final class AnnotationObjectMapper {
     }
 
     private static <T> DynamicType.Builder<T> implementGetAnnotationMethod(ObjectMappingRelatedData<T> data, DynamicType.Builder<T> classBuilder) {
-        List<Method> getAnnotationMethods = AOMUtil.findMethod(data.targetClass,
-                ElementMatchers.named("getAnnotation")
+        List<Method> getAnnotationMethods = AOMUtil.findMethods(data.targetClass,
+                ElementMatchers.named("getClassAnnotation")
                         .and(ElementMatchers.returns(Annotation.class))
                         .and(ElementMatchers.takesArguments(Class.class))
                         .and(ElementMatchers.not(ElementMatchers.isAnnotatedWith(ElementMatchers.any()))));
 
         if (getAnnotationMethods.size() != 1) {
-            logger.warning("More or less than 1 methods match for getAnnotationMethod in " + data.sourceClass);
+            logger.warning("More or less than 1 methods match for getClassAnnotation in " + data.sourceClass);
             return classBuilder;
         }
 
         Method getAnnotationMethod = getAnnotationMethods.get(0);
 
         return classBuilder.method(ElementMatchers.is(getAnnotationMethod))
-                .intercept(MethodDelegation.to(AnnotationAccessAdvice.class));
+                .intercept(MethodDelegation.to(AnnotationAccessAdvice.ClassAnnotation.class));
     }
 
     /**

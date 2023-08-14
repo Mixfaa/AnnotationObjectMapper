@@ -26,5 +26,5 @@ public abstract class TargetClass {
     @MapField(annotatedWith = TestField.class)
     public abstract Double getField();
 
-    public abstract <T extends Annotation> T getAnnotation(Class<T> annotationClass);
+    public abstract <T extends Annotation> T getClassAnnotation(Class<T> annotationClass);
 }

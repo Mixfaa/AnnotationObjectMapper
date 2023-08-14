@@ -12,17 +12,17 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 
-final class AOMUtil {
+public final class AOMUtil {
 
     private AOMUtil() {
     }
 
-    public static List<Field> findField(Class<?> classToScan, ElementMatcher<? super FieldDescription> fieldDescription) {
+    public static List<Field> findFields(Class<?> classToScan, ElementMatcher<? super FieldDescription> fieldDescription) {
         return Arrays.stream(classToScan.getDeclaredFields()).filter(field ->
                 fieldDescription.matches(new FieldDescription.ForLoadedField(field))).collect(Collectors.toList());
     }
 
-    public static List<Method> findMethod(Class<?> classToScan, ElementMatcher<? super MethodDescription> methodDescription) {
+    public static List<Method> findMethods(Class<?> classToScan, ElementMatcher<? super MethodDescription> methodDescription) {
 
         return Arrays.stream(classToScan.getDeclaredMethods()).filter(method ->
                 methodDescription.matches(new MethodDescription.ForLoadedMethod(method))).collect(Collectors.toList());

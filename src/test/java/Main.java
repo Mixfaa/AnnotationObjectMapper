@@ -23,7 +23,7 @@ public class Main {
         System.out.println("Mapped field:");
         System.out.println(mappedObject.getField());
 
-        System.out.println(mappedObject.getAnnotation(TestClassAnnotation.class).stringValue());
-        System.out.println(mappedObject.getAnnotation(TestClassAnnotation2.class).intValue());
+        System.out.println(mappedObject.getClassAnnotation(TestClassAnnotation.class).stringValue());
+        System.out.println(mappedObject.getClassAnnotation(TestClassAnnotation2.class).intValue());
     }
 }
