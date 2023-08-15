@@ -144,7 +144,7 @@ public final class AnnotationsImplementer {
                 .intercept(MethodDelegation.to(AnnotationAccessAdvice.ClassAnnotation.class));
     }
 
-    public static <T> void setupFieldMappedToAnnotationsProps(ObjectMappingRelatedData<T> data) {
+    public static <T> void setupFieldsMappedToAnnotationsProps(ObjectMappingRelatedData<T> data) {
         if (data.target == null) throw new NullPointerException();
 
         List<Field> mappedFields = AnnotationUtils.findFields(data.targetClass,

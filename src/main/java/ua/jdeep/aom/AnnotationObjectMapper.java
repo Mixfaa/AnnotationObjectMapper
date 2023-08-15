@@ -108,7 +108,7 @@ public final class AnnotationObjectMapper {
 
             objectMappingRelatedData.target = targetObject;
 
-            AnnotationsImplementer.setupFieldMappedToAnnotationsProps(objectMappingRelatedData);
+            AnnotationsImplementer.setupFieldsMappedToAnnotationsProps(objectMappingRelatedData);
 
             return targetObject;
 

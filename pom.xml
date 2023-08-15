@@ -49,6 +49,9 @@
                     <descriptorRefs>
                         <descriptorRef>jar-with-dependencies</descriptorRef>
                     </descriptorRefs>
+                    <finalName>aom-1.0</finalName>
+                    <outputDirectory>C:/JavaProjects/AnnotationObjectMapper/build/</outputDirectory>
+                    <appendAssemblyId>false</appendAssemblyId>
                 </configuration>
                 <executions>
                     <execution>
@@ -57,6 +60,11 @@
                         <goals>
                             <goal>single</goal>
                         </goals>
+                        <configuration>
+                            <finalName>aom-1.0</finalName>
+                            <outputDirectory>C:/JavaProjects/AnnotationObjectMapper/build/</outputDirectory>
+                            <appendAssemblyId>false</appendAssemblyId>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
